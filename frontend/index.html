@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>McDonald's Protein Maximizer</title>
+    <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+    <div class="container">
+        <center>
+            <img src="static/logo.png" style="width: 70px;">
+        </center>
+        <h1>APLIKASI REKOMENDASI MENU MAKANAN MCDONALD’S DENGAN PROTEIN TERTINGGI</h1>
+        <p class="description">Dapatkan rekomendasi menu untuk penuhi kebutuhan protein harianmu</p>
+        
+        <form id="menu-form">
+            <div class="form-section">
+                <h2>Basic Settings</h2>
+                <div class="form-group">
+                    <label for="calorie_limit">Batas Kalori:</label>
+                    <input type="number" id="calorie_limit" name="calorie_limit" min="100" value="1000" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Apakah ini waktu breakfast?</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="is_breakfast" value="yes"> Yes
+                        </label>
+                        <label>
+                            <input type="radio" name="is_breakfast" value="no" checked> No
+                        </label>
+                    </div>
+                    <p class="hint">Kalau kamu memilih "yes", kami akan memasukan menu breakfast juga untuk otptimasi protein</p>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2>Custom</h2>
+                <p class="hint">pilih berapa banyak kamu mau item dengan kategori di bawah ini</p>
+                
+                <div class="form-group">
+                    <label for="beverage_count">Beverages:</label>
+                    <input type="number" id="beverage_count" name="beverage_count" min="0" value="0">
+                    <p class="hint">masukan nilai >1 untuk minuman selain air mineral</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dessert_count">Desserts:</label>
+                    <input type="number" id="dessert_count" name="dessert_count" min="0" value="0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="gourmet_count">Gourmet:</label>
+                    <input type="number" id="gourmet_count" name="gourmet_count" min="0" value="0">
+                </div>
+                
+                <div class="form-group">
+                    <label for="mccafe_count">McCafé:</label>
+                    <input type="number" id="mccafe_count" name="mccafe_count" min="0" value="0">
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" id="calculate-btn">Dapatkan Rekomendasi</button>
+            </div>
+        </form>
+        
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Menghitung Kombinasi Optimal...</p>
+        </div>
+        
+        <div id="results" class="results hidden">
+            <h2>Rekomendasi Menu untuk kamu</h2>
+            
+            <div id="error-message" class="error hidden"></div>
+            
+            <div id="adjustments-message" class="adjustments hidden">
+           
+            </div>
+            
+            <div id="meal-results" class="meal-results hidden">
+                <div class="summary-stats">
+                    <div class="stat-box">
+                        <h4>Total Kalori</h4>
+                        <p id="total-calories">0</p>
+                    </div>
+                    <div class="stat-box highlight">
+                        <h4>Total Protein</h4>
+                        <p id="total-protein">0g</p>
+                    </div>
+                </div>
+                
+                <div id="selected-items" class="selected-items">
+                
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById("menu-form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            
+         
+            document.getElementById("loading").classList.remove("hidden");
+            document.getElementById("results").classList.add("hidden");
+            
+
+            const formData = new FormData(this);
+            
+       
+            fetch('/get_combination', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
+            .then(data => {
+              
+                document.getElementById("loading").classList.add("hidden");
+                document.getElementById("results").classList.remove("hidden");
+                
+           
+                document.getElementById("meal-results").classList.remove("hidden");
+                document.getElementById("error-message").classList.add("hidden");
+                
+               
+                const adjustmentsDiv = document.getElementById("adjustments-message");
+                adjustmentsDiv.classList.add("hidden");
+                
+                if (data.adjustments) {
+                    
+                    let adjustmentMessage = '<h3>⚠️ Penyesuaian dilakukan untuk menyesuaikan dengan batas kalori kamu:</h3><ul>';
+                    
+                    Object.keys(data.adjustments).forEach(category => {
+                        const adj = data.adjustments[category];
+                        adjustmentMessage += `<li><strong>${capitalizeFirstLetter(category)}:</strong> 
+                            Dikurangi dari ${adj.requested} ke ${adj.actual} item${adj.actual !== 1 ? 's' : ''}</li>`;
+                    });
+                    
+                    adjustmentMessage += '</ul>';
+                    adjustmentsDiv.innerHTML = adjustmentMessage;
+                    adjustmentsDiv.classList.remove("hidden");
+                }
+                
+               
+                document.getElementById("total-calories").textContent = Math.round(data.total_calories);
+                document.getElementById("total-protein").textContent = Math.round(data.total_protein) + "g";
+                
+             
+                const selectedItemsContainer = document.getElementById("selected-items");
+                selectedItemsContainer.innerHTML = '';
+                
+                if (data.organized_items) {
+                    Object.keys(data.organized_items).forEach(category => {
+                        const items = data.organized_items[category];
+                        
+                      
+                        const categorySection = document.createElement("div");
+                        categorySection.className = "category-section";
+                        
+                     
+                        const categoryHeader = document.createElement("h3");
+                        categoryHeader.textContent = capitalizeFirstLetter(category);
+                        categorySection.appendChild(categoryHeader);
+                        
+                      
+                        const itemsList = document.createElement("div");
+                        itemsList.className = "items-list";
+                        
+                    
+                        items.forEach(item => {
+                            const itemElement = document.createElement("div");
+                            itemElement.className = "item";
+                            itemElement.innerHTML = `
+                                <h4>${item.name}</h4>
+                                <div class="item-stats">
+                                    <span class="calories">${Math.round(item.calories)} kalori</span>
+                                    <span class="protein">${Math.round(item.protein)}g protein</span>
+                                </div>
+                            `;
+                            itemsList.appendChild(itemElement);
+                        });
+                        
+                        categorySection.appendChild(itemsList);
+                        selectedItemsContainer.appendChild(categorySection);
+                    });
+                }
+            })
+            .catch(error => {
+              
+                document.getElementById("loading").classList.add("hidden");
+                document.getElementById("results").classList.remove("hidden");
+                
+               
+                document.getElementById("meal-results").classList.add("hidden");
+                const errorMessage = document.getElementById("error-message");
+                errorMessage.classList.remove("hidden");
+                errorMessage.textContent = error.error || "An unexpected error occurred. Please try again.";
+            });
+        });
+        
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+    </script>
+</body>
+</html>
